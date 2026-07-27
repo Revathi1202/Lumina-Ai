@@ -1,24 +1,3 @@
-import os
-import sys
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-
-from backend.database.database import (
-    init_db,
-    create_chat,
-    save_message,
-    load_messages,
-    get_all_chats,
-    rename_chat
-
-)
-
-
-
 import uuid
 import streamlit as st
 
@@ -31,8 +10,16 @@ from styles.css import load_css
 # ==========================
 # Backend
 # ==========================
+import services.api as api
 
-from services.api import BackendAPI
+
+
+BackendAPI = api.BackendAPI
+
+import inspect
+
+print("BackendAPI file:", inspect.getfile(BackendAPI))
+print("Methods:", [m for m in dir(BackendAPI) if not m.startswith("__")])
 
 # ==========================
 # Components
@@ -45,12 +32,6 @@ from components.timeline import render_activity
 from components.response_card import render_response_card
 from components.chat_input import render_chat_input
 
-# ==========================
-# Page Config
-# ==========================
-init_db()
-if "chat_id" not in st.session_state:
-    st.session_state.chat_id = create_chat()
 
 st.set_page_config(
     page_title="Lumina AI",
@@ -58,6 +39,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+if "chat_id" not in st.session_state:
+    chat = BackendAPI.create_chat()
+    st.session_state.chat_id = chat["id"]
+    
+    
+
 
 # ==========================
 # Session State
@@ -93,35 +81,27 @@ load_css()
 
 render_sidebar()
 
-
-
 # Load selected chat
-loaded_messages = load_messages(st.session_state.chat_id)
 
-st.session_state.messages = [
-    {
-        "role": role,
-        "content": content,
-    }
-    for role, content in loaded_messages
-]
+try:
+    data = BackendAPI.load_chat(
+        st.session_state.chat_id
+    )
 
-# ==========================
-# Header
-# ==========================
+    st.session_state.messages = data["messages"]
+
+except Exception:
+    st.session_state.messages = []
 
 render_header()
 
-# ==========================
-# Chat History
-# ==========================
 
-# for message in st.session_state.messages:
+# or message in st.session_state.messages:
 
-#     if message["role"] == "user":
+# #     if message["role"] == "user":
 
-#         with st.chat_message("user"):
-#             st.markdown(message["content"])
+# #         with st.chat_message("user"):
+# #             st.markdown(message["content"])
 
 
 for message in st.session_state.messages:
@@ -139,13 +119,14 @@ prompt = render_chat_input()
 if prompt:
 
     # Rename only when this is the first message
-    if len(load_messages(st.session_state.chat_id)) == 0:
-        rename_chat(
+    if len(st.session_state.messages) == 0:
+
+        BackendAPI.rename_chat(
             st.session_state.chat_id,
             prompt[:40]
         )
 
-    save_message(
+    BackendAPI.save_message(
         st.session_state.chat_id,
         "user",
         prompt
@@ -176,10 +157,7 @@ if prompt:
         answer = result["answer"]
 
         st.session_state.last_answer = answer
-        
-        
-        
-        save_message(
+        BackendAPI.save_message(
     st.session_state.chat_id,
     "assistant",
     answer
@@ -235,6 +213,31 @@ if st.session_state.execution_trace:
 
 
 
+
+
+
+# import os
+# import sys
+
+# PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# if PROJECT_ROOT not in sys.path:
+#     sys.path.insert(0, PROJECT_ROOT)
+
+
+# from backend.database.database import (
+#     init_db,
+#     create_chat,
+#     save_message,
+#     load_messages,
+#     get_all_chats,
+#     rename_chat
+
+# )
+
+
+
+# import uuid
 # import streamlit as st
 
 # # ==========================
@@ -255,13 +258,17 @@ if st.session_state.execution_trace:
 
 # from components.header import render_header
 # from components.sidebar import render_sidebar
-# from components.chat import render_chat
-# from components.chat_input import render_chat_input
+# from components.planner_card import render_planner_card
 # from components.timeline import render_activity
+# from components.response_card import render_response_card
+# from components.chat_input import render_chat_input
 
 # # ==========================
 # # Page Config
 # # ==========================
+# init_db()
+# if "chat_id" not in st.session_state:
+#     st.session_state.chat_id = create_chat()
 
 # st.set_page_config(
 #     page_title="Lumina AI",
@@ -271,25 +278,17 @@ if st.session_state.execution_trace:
 # )
 
 # # ==========================
-# # Load CSS
-# # ==========================
-
-# load_css()
-
-# # ==========================
-# # Initialize Conversation
-# # ==========================
-
-# if "conversation_id" not in st.session_state:
-
-#     conversation = BackendAPI.create_conversation()
-
-#     st.session_state.conversation_id = conversation["id"]
-#     st.session_state.thread_id = conversation["id"]
-
-# # ==========================
 # # Session State
 # # ==========================
+
+# if "thread_id" not in st.session_state:
+#     st.session_state.thread_id = str(uuid.uuid4())
+
+# if "messages" not in st.session_state:
+#     st.session_state.messages = []
+
+# if "last_answer" not in st.session_state:
+#     st.session_state.last_answer = ""
 
 # if "execution_trace" not in st.session_state:
 #     st.session_state.execution_trace = []
@@ -301,10 +300,29 @@ if st.session_state.execution_trace:
 #     st.session_state.tool_outputs = []
 
 # # ==========================
+# # Load CSS
+# # ==========================
+
+# load_css()
+
+# # ==========================
 # # Sidebar
 # # ==========================
 
 # render_sidebar()
+
+
+
+# # Load selected chat
+# loaded_messages = load_messages(st.session_state.chat_id)
+
+# st.session_state.messages = [
+#     {
+#         "role": role,
+#         "content": content,
+#     }
+#     for role, content in loaded_messages
+# ]
 
 # # ==========================
 # # Header
@@ -313,10 +331,20 @@ if st.session_state.execution_trace:
 # render_header()
 
 # # ==========================
-# # Chat Messages
+# # Chat History
 # # ==========================
 
-# render_chat()
+# # for message in st.session_state.messages:
+
+# #     if message["role"] == "user":
+
+# #         with st.chat_message("user"):
+# #             st.markdown(message["content"])
+
+
+# for message in st.session_state.messages:
+#     with st.chat_message(message["role"]):
+#         st.markdown(message["content"])
 
 # # ==========================
 # # Chat Input
@@ -324,11 +352,35 @@ if st.session_state.execution_trace:
 
 # prompt = render_chat_input()
 
+
+
+# if prompt:
+
+#     # Rename only when this is the first message
+#     if len(load_messages(st.session_state.chat_id)) == 0:
+#         rename_chat(
+#             st.session_state.chat_id,
+#             prompt[:40]
+#         )
+
+#     save_message(
+#         st.session_state.chat_id,
+#         "user",
+#         prompt
+#     )
+
 # # ==========================
-# # Send Message
+# # Backend
 # # ==========================
 
 # if prompt:
+
+#     st.session_state.messages.append(
+#         {
+#             "role": "user",
+#             "content": prompt,
+#         }
+#     )
 
 #     try:
 
@@ -337,8 +389,26 @@ if st.session_state.execution_trace:
 #             result = BackendAPI.send_message(
 #                 query=prompt,
 #                 thread_id=st.session_state.thread_id,
-#                 conversation_id=st.session_state.conversation_id,
 #             )
+
+#         answer = result["answer"]
+
+#         st.session_state.last_answer = answer
+        
+        
+        
+#         save_message(
+#     st.session_state.chat_id,
+#     "assistant",
+#     answer
+# )
+
+#         st.session_state.messages.append(
+#             {
+#                 "role": "assistant",
+#                 "content": answer,
+#             }
+#         )
 
 #         st.session_state.execution_trace = result.get(
 #             "execution_trace",
@@ -370,3 +440,16 @@ if st.session_state.execution_trace:
 #     render_activity(
 #         st.session_state.execution_trace
 #     )
+
+# # ==========================
+# # Final AI Response
+# # ==========================
+
+# # if st.session_state.last_answer:
+
+# #     render_response_card(
+# #         st.session_state.last_answer
+# #     )
+
+
+
